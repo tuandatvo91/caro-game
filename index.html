@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Caro - Gomoku</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    padding: 16px;
+    background: #1a1a1a;
+    font-family: -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  h1 { color: #fff; font-size: 20px; font-weight: 500; margin: 0 0 16px; }
+  .controls { display: flex; gap: 8px; margin-bottom: 12px; width: 100%; max-width: 480px; }
+  button {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #444;
+    background: #2a2a2a;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:active { background: #3a3a3a; }
+  #resetBtn { flex: 0 0 44px; }
+  #status {
+    color: #fff;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 10px;
+    height: 20px;
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(15, 1fr);
+    gap: 1px;
+    background: #444;
+    border: 1px solid #444;
+    width: 100%;
+    max-width: 480px;
+    aspect-ratio: 1;
+  }
+  .cell {
+    background: #2a2a2a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+<h1>Caro - Gomoku</h1>
+<div class="controls">
+  <button id="modePvP">Người vs Người</button>
+  <button id="modePvE">Người vs Máy</button>
+  <button id="resetBtn">&#8635;</button>
+</div>
+<div id="status">Chọn chế độ chơi</div>
+<div id="board"></div>
+
+<script>
+const N = 15;
+let board = Array(N*N).fill(null);
+let current = 'X';
+let mode = null;
+let over = false;
+
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('status');
+
+function cellColor(v){
+  if(v==='X') return '#3b82f6';
+  if(v==='O') return '#ef4444';
+  return '#fff';
+}
+
+function render(){
+  boardEl.innerHTML = '';
+  for(let i=0;i<N*N;i++){
+    const c = document.createElement('div');
+    c.className = 'cell';
+    c.style.color = cellColor(board[i]);
+    c.textContent = board[i] || '';
+    c.onclick = () => handleMove(i);
+    boardEl.appendChild(c);
+  }
+}
+
+function checkWin(idx, p){
+  const x = idx % N, y = Math.floor(idx / N);
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  for(const [dx,dy] of dirs){
+    let count = 1;
+    for(let s=1;s<5;s++){
+      const nx=x+dx*s, ny=y+dy*s;
+      if(nx<0||nx>=N||ny<0||ny>=N) break;
+      if(board[ny*N+nx]!==p) break;
+      count++;
+    }
+    for(let s=1;s<5;s++){
+      const nx=x-dx*s, ny=y-dy*s;
+      if(nx<0||nx>=N||ny<0||ny>=N) break;
+      if(board[ny*N+nx]!==p) break;
+      count++;
+    }
+    if(count>=5) return true;
+  }
+  return false;
+}
+
+function handleMove(i){
+  if(over || !mode || board[i]) return;
+  board[i] = current;
+  render();
+  if(checkWin(i, current)){
+    statusEl.textContent = (current==='X'?'X':'O') + ' thắng rồi!';
+    over = true;
+    return;
+  }
+  if(board.every(v=>v)){
+    statusEl.textContent = 'Hòa rồi!';
+    over = true;
+    return;
+  }
+  current = current==='X' ? 'O' : 'X';
+  if(mode==='PvE' && current==='O' && !over){
+    statusEl.textContent = 'Máy đang suy nghĩ...';
+    setTimeout(aiMove, 300);
+  } else {
+    statusEl.textContent = 'Lượt của ' + current;
+  }
+}
+
+function evalLine(count, openEnds){
+  if(count>=5) return 100000;
+  if(openEnds===0) return count;
+  if(count===4) return 10000;
+  if(count===3) return openEnds===2 ? 1000 : 100;
+  if(count===2) return openEnds===2 ? 100 : 10;
+  return openEnds===2 ? 10 : 1;
+}
+
+function scorePos(idx, p){
+  const x = idx % N, y = Math.floor(idx / N);
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  let total = 0;
+  for(const [dx,dy] of dirs){
+    let count = 1, openEnds = 0;
+    let nx=x+dx, ny=y+dy;
+    while(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny*N+nx]===p){count++;nx+=dx;ny+=dy;}
+    if(nx>=0&&nx<N&&ny>=0&&ny<N&&!board[ny*N+nx]) openEnds++;
+    nx=x-dx; ny=y-dy;
+    while(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny*N+nx]===p){count++;nx-=dx;ny-=dy;}
+    if(nx>=0&&nx<N&&ny>=0&&ny<N&&!board[ny*N+nx]) openEnds++;
+    total += evalLine(count, openEnds);
+  }
+  return total;
+}
+
+function aiMove(){
+  if(over) return;
+  let bestScore = -Infinity, bestIdx = -1;
+  for(let i=0;i<N*N;i++){
+    if(board[i]) continue;
+    let hasNeighbor = false;
+    const x=i%N, y=Math.floor(i/N);
+    for(let dx=-2;dx<=2;dx++) for(let dy=-2;dy<=2;dy++){
+      const nx=x+dx, ny=y+dy;
+      if(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny*N+nx]) hasNeighbor = true;
+    }
+    if(!hasNeighbor && board.some(v=>v)) continue;
+    board[i] = 'O';
+    const offScore = scorePos(i, 'O');
+    board[i] = 'X';
+    const defScore = scorePos(i, 'X');
+    board[i] = null;
+    const score = offScore * 1.1 + defScore;
+    if(score > bestScore){ bestScore = score; bestIdx = i; }
+  }
+  if(bestIdx === -1){
+    const empties = board.map((v,i)=>v?null:i).filter(v=>v!==null);
+    bestIdx = empties[Math.floor(Math.random()*empties.length)];
+  }
+  board[bestIdx] = 'O';
+  render();
+  if(checkWin(bestIdx, 'O')){
+    statusEl.textContent = 'Máy thắng rồi!';
+    over = true;
+    return;
+  }
+  if(board.every(v=>v)){
+    statusEl.textContent = 'Hòa rồi!';
+    over = true;
+    return;
+  }
+  current = 'X';
+  statusEl.textContent = 'Lượt của X';
+}
+
+function startGame(m){
+  mode = m;
+  board = Array(N*N).fill(null);
+  current = 'X';
+  over = false;
+  statusEl.textContent = 'Lượt của X';
+  render();
+}
+
+document.getElementById('modePvP').onclick = () => startGame('PvP');
+document.getElementById('modePvE').onclick = () => startGame('PvE');
+document.getElementById('resetBtn').onclick = () => { if(mode) startGame(mode); };
+
+render();
+</script>
+</body>
+</html>
