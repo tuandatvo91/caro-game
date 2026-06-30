@@ -17,27 +17,95 @@
     min-height: 100vh;
   }
   h1 { color: #fff; font-size: 20px; font-weight: 500; margin: 0 0 16px; }
+  .panel {
+    width: 100%;
+    max-width: 480px;
+    background: #232323;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .panel label { color: #ccc; font-size: 13px; display: block; margin-bottom: 6px; }
+  .panel input[type=text] {
+    width: 100%;
+    padding: 9px;
+    border-radius: 7px;
+    border: 1px solid #444;
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+  .row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+  .diff-btn {
+    width: 34px; height: 34px;
+    border-radius: 7px;
+    border: 1px solid #444;
+    background: #1a1a1a;
+    color: #ccc;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .diff-btn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+  .mode-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .mode-tab {
+    flex: 1;
+    padding: 9px;
+    border-radius: 7px;
+    border: 1px solid #444;
+    background: #1a1a1a;
+    color: #ccc;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .mode-tab.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+  button.primary {
+    width: 100%;
+    padding: 11px;
+    border-radius: 8px;
+    border: none;
+    background: #3b82f6;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
   .controls { display: flex; gap: 8px; margin-bottom: 12px; width: 100%; max-width: 480px; }
-  button {
+  .controls button {
     flex: 1;
     padding: 10px;
     border-radius: 8px;
     border: 1px solid #444;
     background: #2a2a2a;
     color: #fff;
-    font-size: 14px;
+    font-size: 13px;
     cursor: pointer;
   }
-  button:active { background: #3a3a3a; }
-  #resetBtn { flex: 0 0 44px; }
+  #resetBtn { flex: 0 0 44px !important; }
   #status {
     color: #fff;
     text-align: center;
-    font-size: 15px;
-    font-weight: 500;
+    font-size: 16px;
+    font-weight: 600;
     margin-bottom: 10px;
-    height: 20px;
+    min-height: 22px;
   }
+  #status.win { color: #4ade80; }
+  #scoreboard {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    justify-content: space-around;
+    background: #232323;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 12px;
+    color: #fff;
+    font-size: 13px;
+  }
+  #scoreboard .sc-item { text-align: center; }
+  #scoreboard .sc-name { color: #999; font-size: 11px; }
+  #scoreboard .sc-val { font-size: 18px; font-weight: 700; }
   #board {
     display: grid;
     grid-template-columns: repeat(15, 1fr);
@@ -57,28 +125,160 @@
     font-weight: 700;
     cursor: pointer;
     user-select: none;
+    transition: background 0.15s;
   }
+  .cell.placed { animation: pop 0.2s ease; }
+  .cell.winning { background: #4ade80 !important; animation: blink 0.7s infinite; }
+  @keyframes pop {
+    0% { transform: scale(0.3); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes blink {
+    0%, 100% { background: #4ade80; }
+    50% { background: #22c55e; }
+  }
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
 <h1>Caro - Gomoku</h1>
-<div class="controls">
-  <button id="modePvP">Người vs Người</button>
-  <button id="modePvE">Người vs Máy</button>
+
+<div class="panel" id="setupPanel">
+  <div class="mode-tabs">
+    <button class="mode-tab active" id="tabPvP">Người vs Người</button>
+    <button class="mode-tab" id="tabPvE">Người vs Máy</button>
+  </div>
+
+  <label>Tên người chơi 1 (X)</label>
+  <input type="text" id="name1" placeholder="Nhập tên..." maxlength="16">
+
+  <label id="name2Label">Tên người chơi 2 (O)</label>
+  <input type="text" id="name2" placeholder="Nhập tên..." maxlength="16">
+
+  <div id="diffSection" class="hidden">
+    <label>Độ khó AI</label>
+    <div class="row" id="diffRow">
+      <button class="diff-btn" data-d="1">1</button>
+      <button class="diff-btn" data-d="2">2</button>
+      <button class="diff-btn active" data-d="3">3</button>
+      <button class="diff-btn" data-d="4">4</button>
+      <button class="diff-btn" data-d="5">5</button>
+    </div>
+  </div>
+
+  <button class="primary" id="startBtn">Bắt đầu chơi</button>
+</div>
+
+<div id="scoreboard" class="hidden"></div>
+
+<div class="controls hidden" id="gameControls">
+  <button id="backBtn">&larr; Đổi cài đặt</button>
   <button id="resetBtn">&#8635;</button>
 </div>
-<div id="status">Chọn chế độ chơi</div>
-<div id="board"></div>
+<div id="status"></div>
+<div id="board" class="hidden"></div>
 
 <script>
 const N = 15;
 let board = Array(N*N).fill(null);
 let current = 'X';
-let mode = null;
+let mode = 'PvP';
 let over = false;
+let difficulty = 3;
+let p1Name = 'Người chơi 1';
+let p2Name = 'Người chơi 2';
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
+const setupPanel = document.getElementById('setupPanel');
+const scoreboardEl = document.getElementById('scoreboard');
+const gameControls = document.getElementById('gameControls');
+const name1Input = document.getElementById('name1');
+const name2Input = document.getElementById('name2');
+const name2Label = document.getElementById('name2Label');
+const diffSection = document.getElementById('diffSection');
+
+// ---- Audio (simple WebAudio beep synth, no external files) ----
+let audioCtx;
+function playTone(freq, dur, type='sine', vol=0.15){
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.stop(audioCtx.currentTime + dur);
+  }catch(e){}
+}
+function sfxClick(){ playTone(520, 0.08, 'square', 0.1); }
+function sfxWin(){
+  [523,659,784,1046].forEach((f,i)=>setTimeout(()=>playTone(f,0.25,'triangle',0.18), i*120));
+}
+
+// ---- Score persistence ----
+function scoreKey(){ return 'caro_score_' + mode; }
+function loadScore(){
+  try{
+    const raw = localStorage.getItem(scoreKey());
+    return raw ? JSON.parse(raw) : {p1:0, p2:0, draw:0};
+  }catch(e){ return {p1:0, p2:0, draw:0}; }
+}
+function saveScore(s){
+  try{ localStorage.setItem(scoreKey(), JSON.stringify(s)); }catch(e){}
+}
+function renderScoreboard(){
+  const s = loadScore();
+  const label2 = mode==='PvE' ? 'Máy' : p2Name;
+  scoreboardEl.classList.remove('hidden');
+  scoreboardEl.innerHTML = `
+    <div class="sc-item"><div class="sc-name">${p1Name}</div><div class="sc-val" style="color:#3b82f6">${s.p1}</div></div>
+    <div class="sc-item"><div class="sc-name">Hòa</div><div class="sc-val" style="color:#999">${s.draw}</div></div>
+    <div class="sc-item"><div class="sc-name">${label2}</div><div class="sc-val" style="color:#ef4444">${s.p2}</div></div>
+  `;
+}
+
+document.getElementById('tabPvP').onclick = () => setMode('PvP');
+document.getElementById('tabPvE').onclick = () => setMode('PvE');
+
+function setMode(m){
+  mode = m;
+  document.getElementById('tabPvP').classList.toggle('active', m==='PvP');
+  document.getElementById('tabPvE').classList.toggle('active', m==='PvE');
+  diffSection.classList.toggle('hidden', m!=='PvE');
+  name2Label.textContent = m==='PvE' ? 'Tên người chơi' : 'Tên người chơi 2 (O)';
+  name2Input.classList.toggle('hidden', m==='PvE');
+  if(m==='PvE') name2Input.classList.add('hidden'); else name2Input.classList.remove('hidden');
+}
+
+document.querySelectorAll('.diff-btn').forEach(btn=>{
+  btn.onclick = () => {
+    document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    difficulty = parseInt(btn.dataset.d);
+  };
+});
+
+document.getElementById('startBtn').onclick = () => {
+  p1Name = name1Input.value.trim() || 'Người chơi 1';
+  p2Name = mode==='PvE' ? 'Máy' : (name2Input.value.trim() || 'Người chơi 2');
+  setupPanel.classList.add('hidden');
+  gameControls.classList.remove('hidden');
+  boardEl.classList.remove('hidden');
+  renderScoreboard();
+  startGame();
+};
+
+document.getElementById('backBtn').onclick = () => {
+  setupPanel.classList.remove('hidden');
+  gameControls.classList.add('hidden');
+  boardEl.classList.add('hidden');
+  scoreboardEl.classList.add('hidden');
+  statusEl.textContent = '';
+};
 
 function cellColor(v){
   if(v==='X') return '#3b82f6';
@@ -86,11 +286,15 @@ function cellColor(v){
   return '#fff';
 }
 
-function render(){
+let winningCells = [];
+
+function render(lastIdx){
   boardEl.innerHTML = '';
   for(let i=0;i<N*N;i++){
     const c = document.createElement('div');
     c.className = 'cell';
+    if(winningCells.includes(i)) c.classList.add('winning');
+    if(i===lastIdx) c.classList.add('placed');
     c.style.color = cellColor(board[i]);
     c.textContent = board[i] || '';
     c.onclick = () => handleMove(i);
@@ -98,61 +302,85 @@ function render(){
   }
 }
 
-function checkWin(idx, p){
+function getWinLine(idx, p){
   const x = idx % N, y = Math.floor(idx / N);
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
   for(const [dx,dy] of dirs){
-    let count = 1;
+    let cells = [idx];
     for(let s=1;s<5;s++){
       const nx=x+dx*s, ny=y+dy*s;
       if(nx<0||nx>=N||ny<0||ny>=N) break;
       if(board[ny*N+nx]!==p) break;
-      count++;
+      cells.push(ny*N+nx);
     }
     for(let s=1;s<5;s++){
       const nx=x-dx*s, ny=y-dy*s;
       if(nx<0||nx>=N||ny<0||ny>=N) break;
       if(board[ny*N+nx]!==p) break;
-      count++;
+      cells.push(ny*N+nx);
     }
-    if(count>=5) return true;
+    if(cells.length>=5) return cells;
   }
-  return false;
+  return null;
 }
 
 function handleMove(i){
-  if(over || !mode || board[i]) return;
+  if(over || board[i]) return;
+  if(mode==='PvE' && current==='O') return;
   board[i] = current;
-  render();
-  if(checkWin(i, current)){
-    statusEl.textContent = (current==='X'?'X':'O') + ' thắng rồi!';
-    over = true;
+  sfxClick();
+  render(i);
+  const win = getWinLine(i, current);
+  if(win){
+    winningCells = win;
+    finishGame(current);
     return;
   }
   if(board.every(v=>v)){
-    statusEl.textContent = 'Hòa rồi!';
-    over = true;
+    finishGame('draw');
     return;
   }
   current = current==='X' ? 'O' : 'X';
   if(mode==='PvE' && current==='O' && !over){
     statusEl.textContent = 'Máy đang suy nghĩ...';
-    setTimeout(aiMove, 300);
+    setTimeout(aiMove, 350);
   } else {
-    statusEl.textContent = 'Lượt của ' + current;
+    const name = current==='X' ? p1Name : p2Name;
+    statusEl.textContent = 'Lượt của ' + name;
   }
 }
 
-function evalLine(count, openEnds){
+function finishGame(winner){
+  over = true;
+  const s = loadScore();
+  if(winner==='draw'){
+    s.draw++;
+    statusEl.textContent = 'Hòa rồi!';
+    statusEl.classList.remove('win');
+  } else {
+    const name = winner==='X' ? p1Name : p2Name;
+    if(winner==='X') s.p1++; else s.p2++;
+    statusEl.textContent = name + ' Win!';
+    statusEl.classList.add('win');
+    sfxWin();
+  }
+  saveScore(s);
+  renderScoreboard();
+  render();
+}
+
+// AI difficulty: 1=random-ish, 5=strongest heuristic
+function evalLine(count, openEnds, diff){
   if(count>=5) return 100000;
+  const aggressiveness = 1 + diff*0.15;
   if(openEnds===0) return count;
-  if(count===4) return 10000;
-  if(count===3) return openEnds===2 ? 1000 : 100;
-  if(count===2) return openEnds===2 ? 100 : 10;
+  if(count===4) return 10000 * aggressiveness;
+  if(count===3) return (openEnds===2 ? 1000 : 100) * aggressiveness;
+  if(count===2) return (openEnds===2 ? 100 : 10) * aggressiveness;
   return openEnds===2 ? 10 : 1;
 }
 
-function scorePos(idx, p){
+function scorePos(idx, p, diff){
   const x = idx % N, y = Math.floor(idx / N);
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
   let total = 0;
@@ -164,65 +392,77 @@ function scorePos(idx, p){
     nx=x-dx; ny=y-dy;
     while(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny*N+nx]===p){count++;nx-=dx;ny-=dy;}
     if(nx>=0&&nx<N&&ny>=0&&ny<N&&!board[ny*N+nx]) openEnds++;
-    total += evalLine(count, openEnds);
+    total += evalLine(count, openEnds, diff);
   }
   return total;
 }
 
 function aiMove(){
   if(over) return;
-  let bestScore = -Infinity, bestIdx = -1;
+  const empties = [];
   for(let i=0;i<N*N;i++){
     if(board[i]) continue;
-    let hasNeighbor = false;
     const x=i%N, y=Math.floor(i/N);
+    let hasNeighbor = false;
     for(let dx=-2;dx<=2;dx++) for(let dy=-2;dy<=2;dy++){
       const nx=x+dx, ny=y+dy;
       if(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny*N+nx]) hasNeighbor = true;
     }
-    if(!hasNeighbor && board.some(v=>v)) continue;
+    if(hasNeighbor || !board.some(v=>v)) empties.push(i);
+  }
+  const candidates = empties.length ? empties : board.map((v,i)=>v?null:i).filter(v=>v!==null);
+
+  // Lower difficulty: sometimes pick a random/suboptimal move
+  const randomness = [0.6, 0.4, 0.2, 0.08, 0][difficulty-1];
+  if(Math.random() < randomness){
+    const idx = candidates[Math.floor(Math.random()*candidates.length)];
+    placeAi(idx);
+    return;
+  }
+
+  let bestScore = -Infinity, bestIdx = -1;
+  for(const i of candidates){
     board[i] = 'O';
-    const offScore = scorePos(i, 'O');
+    const offScore = scorePos(i, 'O', difficulty);
     board[i] = 'X';
-    const defScore = scorePos(i, 'X');
+    const defScore = scorePos(i, 'X', difficulty);
     board[i] = null;
     const score = offScore * 1.1 + defScore;
     if(score > bestScore){ bestScore = score; bestIdx = i; }
   }
-  if(bestIdx === -1){
-    const empties = board.map((v,i)=>v?null:i).filter(v=>v!==null);
-    bestIdx = empties[Math.floor(Math.random()*empties.length)];
-  }
-  board[bestIdx] = 'O';
-  render();
-  if(checkWin(bestIdx, 'O')){
-    statusEl.textContent = 'Máy thắng rồi!';
-    over = true;
+  if(bestIdx===-1) bestIdx = candidates[Math.floor(Math.random()*candidates.length)];
+  placeAi(bestIdx);
+}
+
+function placeAi(idx){
+  board[idx] = 'O';
+  sfxClick();
+  render(idx);
+  const win = getWinLine(idx, 'O');
+  if(win){
+    winningCells = win;
+    finishGame('O');
     return;
   }
   if(board.every(v=>v)){
-    statusEl.textContent = 'Hòa rồi!';
-    over = true;
+    finishGame('draw');
     return;
   }
   current = 'X';
-  statusEl.textContent = 'Lượt của X';
+  statusEl.textContent = 'Lượt của ' + p1Name;
 }
 
-function startGame(m){
-  mode = m;
+function startGame(){
   board = Array(N*N).fill(null);
   current = 'X';
   over = false;
-  statusEl.textContent = 'Lượt của X';
+  winningCells = [];
+  statusEl.classList.remove('win');
+  statusEl.textContent = 'Lượt của ' + p1Name;
   render();
 }
 
-document.getElementById('modePvP').onclick = () => startGame('PvP');
-document.getElementById('modePvE').onclick = () => startGame('PvE');
-document.getElementById('resetBtn').onclick = () => { if(mode) startGame(mode); };
-
-render();
+document.getElementById('resetBtn').onclick = () => { startGame(); };
 </script>
 </body>
 </html>
